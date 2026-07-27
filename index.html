@@ -40,8 +40,9 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
 #app{display:none;max-width:860px;margin:0 auto;padding-bottom:90px}
 .topbar{background:var(--card);border-bottom:1px solid var(--line);padding:14px 18px;
   display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
-.topbar .t-title{font-size:17px;font-weight:800;letter-spacing:1px}
+.topbar .t-title{font-size:17px;font-weight:800;letter-spacing:1px;display:flex;align-items:center;gap:8px}
 .topbar .t-title span{color:var(--brand)}
+.topbar .t-title img{height:30px;width:auto;max-width:120px;object-fit:contain;border-radius:6px}
 .t-user{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub)}
 .t-badge{background:var(--brand-lt);color:var(--brand-dk);border-radius:20px;padding:3px 10px;font-weight:700}
 .logout{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 10px;font-size:12px;color:var(--sub)}
@@ -171,7 +172,7 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
 <!-- ================= 主畫面 ================= -->
 <div id="app">
   <div class="topbar">
-    <div class="t-title">🐦 金鶯<span>交班</span></div>
+    <div class="t-title"><img src="LOGO原始檔_0.jpg" alt="金鶯診所" onerror="this.remove()"><span style="color:var(--ink)">金鶯</span><span style="margin-left:-8px">交班</span></div>
     <div class="t-user">
       <span class="t-badge" id="u-badge"></span>
       <span id="u-name"></span>
