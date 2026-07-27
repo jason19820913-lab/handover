@@ -108,6 +108,22 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
 .prio.sel-warn{border-color:var(--warn);background:var(--warn-lt);color:var(--warn)}
 .prio.sel-urgent{border-color:var(--urgent);background:var(--urgent-lt);color:var(--urgent)}
 
+/* ---------- 班表面板 ---------- */
+.sched-panel{border:1.5px solid #fcd9a8;background:#fffaf2;border-radius:12px;padding:12px 14px;margin-bottom:16px}
+.sp-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sp-title{font-weight:800;font-size:13.5px;color:var(--brand-dk)}
+.sp-day{margin-left:auto;display:flex;gap:6px}
+.sp-day button{border:1px solid var(--line);background:#fff;border-radius:16px;padding:4px 12px;font-size:12px;font-weight:700;color:var(--sub)}
+.sp-day button.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.sp-row{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:8px;font-size:13.5px;line-height:1.6}
+.sp-row.hl{background:var(--brand-lt);font-weight:800}
+.sp-row .sp-shift{flex:0 0 44px;font-weight:700;color:var(--sub)}
+.sp-row.hl .sp-shift{color:var(--brand-dk)}
+.sp-row .sp-names{flex:1;word-break:break-word}
+.sp-row.off{color:#9ca3af}
+.sp-adj{border-top:1px dashed #fcd9a8;margin-top:8px;padding-top:8px;font-size:12.5px;color:#b45309;line-height:1.7}
+.sp-empty{font-size:13px;color:#9ca3af;padding:6px 4px}
+
 /* ---------- 總覽 ---------- */
 .ov-bar{display:flex;gap:10px;margin-bottom:12px}
 .ov-bar select{flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff}
@@ -191,23 +207,41 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
           <select id="f-clinic"></select>
         </div>
         <div class="fld">
-          <label>班別</label>
-          <select id="f-shift">
-            <option value="早班">早班</option>
-            <option value="午班">午班</option>
-            <option value="晚班">晚班</option>
-          </select>
+          <label>接收職位</label>
+          <select id="f-group"></select>
         </div>
+      </div>
+      <div class="fld">
+        <label>交接班別</label>
+        <select id="f-shift">
+          <option value="早班">早班</option>
+          <option value="午班">午班</option>
+          <option value="晚班">晚班</option>
+          <option value="全天">全天</option>
+        </select>
       </div>
       <div class="fld">
         <label>交班對象</label>
         <div class="radio-row">
           <button class="radio-opt sel" id="tt-shift" onclick="setTargetType('下一班')">交給下一班<br><small id="tt-shift-sub"></small></button>
-          <button class="radio-opt" id="tt-person" onclick="setTargetType('指定個人')">指定特定對象<br><small>可跨職位選擇</small></button>
+          <button class="radio-opt" id="tt-person" onclick="setTargetType('指定個人')">指定特定對象<br><small>依院區＋職位篩選</small></button>
         </div>
       </div>
+
+      <!-- 下一班：班表自動顯示 -->
+      <div class="sched-panel" id="sched-panel">
+        <div class="sp-head">
+          <span class="sp-title" id="sp-title">📅 班表</span>
+          <div class="sp-day">
+            <button id="sp-today" class="active" onclick="setSchedDay(0)">今日</button>
+            <button id="sp-tomorrow" onclick="setSchedDay(1)">明日</button>
+          </div>
+        </div>
+        <div id="sp-body"><div class="sp-empty">載入中…</div></div>
+      </div>
+
       <div class="fld" id="f-target-wrap" style="display:none">
-        <label>指定對象（先選院區篩選，再選人員）</label>
+        <label>指定對象（依上方院區＋職位篩選）</label>
         <select id="f-target"></select>
       </div>
 
@@ -286,6 +320,7 @@ var USER = null, CLINICS = [], STAFF = [];
 var _inboxRecs = [], _sentRecs = [], _allRecs = [];
 var _inboxSeg = 'pending';
 var _targetType = '下一班', _priority = '一般', _ovGroup = '醫師';
+var _schedDay = 0, _schedSeq = 0;
 
 /* ---------- 通用 GET ---------- */
 function get(params, cb) {
@@ -364,8 +399,12 @@ function enterApp() {
   cSel.innerHTML = CLINICS.map(function (c) {
     return '<option value="' + esc(c) + '"' + (c === USER.clinic ? ' selected' : '') + '>' + esc(c) + '</option>';
   }).join('');
-  cSel.onchange = buildTargetOptions;
+  cSel.onchange = onFormChange;
+  buildGroupOptions();
+  document.getElementById('f-group').onchange = onFormChange;
+  document.getElementById('f-shift').onchange = function () { loadSched(); };
   buildTargetOptions();
+  loadSched();
 
   // 總覽院區下拉
   var oSel = document.getElementById('ov-clinic');
@@ -485,6 +524,109 @@ function setTargetType(t) {
   document.getElementById('tt-shift').classList.toggle('sel', t === '下一班');
   document.getElementById('tt-person').classList.toggle('sel', t === '指定個人');
   document.getElementById('f-target-wrap').style.display = t === '指定個人' ? 'block' : 'none';
+  buildGroupOptions();
+  buildTargetOptions();
+  loadSched();
+}
+function buildGroupOptions() {
+  var sel = document.getElementById('f-group');
+  var prev = sel.value;
+  var opts = '';
+  if (_targetType === '指定個人') opts += '<option value="全部">全部職位</option>';
+  GROUPS.forEach(function (g) {
+    opts += '<option value="' + esc(g) + '">' + esc(g) + '</option>';
+  });
+  sel.innerHTML = opts;
+  var valid = ['全部'].concat(GROUPS);
+  if (prev && valid.indexOf(prev) >= 0 && !(prev === '全部' && _targetType === '下一班')) sel.value = prev;
+  else sel.value = _targetType === '下一班' ? USER.group : (GROUPS.indexOf(USER.group) >= 0 ? USER.group : GROUPS[0]);
+  updateShiftSub();
+}
+function onFormChange() {
+  updateShiftSub();
+  buildTargetOptions();
+  loadSched();
+}
+function updateShiftSub() {
+  var clinic = document.getElementById('f-clinic').value;
+  var g = document.getElementById('f-group').value;
+  document.getElementById('tt-shift-sub').textContent = clinic + '・' + (g === '全部' ? USER.group : g);
+}
+
+/* ---------- 班表自動顯示 ---------- */
+function schedDateStr(offset) {
+  var d = new Date();
+  d.setDate(d.getDate() + offset);
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + m + '-' + dd;
+}
+function setSchedDay(day) {
+  _schedDay = day;
+  document.getElementById('sp-today').classList.toggle('active', day === 0);
+  document.getElementById('sp-tomorrow').classList.toggle('active', day === 1);
+  loadSched();
+}
+function loadSched() {
+  var panel = document.getElementById('sched-panel');
+  if (_targetType !== '下一班') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  var clinic = document.getElementById('f-clinic').value;
+  var g = document.getElementById('f-group').value;
+  if (g === '全部') g = USER.group;
+  var date = schedDateStr(_schedDay);
+  document.getElementById('sp-title').textContent = '📅 ' + clinic + '・' + g + ' 班表（' + date + '）';
+  var body = document.getElementById('sp-body');
+  if (g === '醫師' || g === '其他') {
+    body.innerHTML = '<div class="sp-empty">「' + esc(g) + '」職位不在排班系統中，無班表可顯示</div>';
+    return;
+  }
+  body.innerHTML = '<div class="sp-empty">載入班表中…</div>';
+  var seq = ++_schedSeq;
+  get({ action: 'getSchedule', clinic: clinic, group: g, date: date }, function (res) {
+    if (seq !== _schedSeq) return; // 已有較新的查詢
+    if (!res || res.error) {
+      body.innerHTML = '<div class="sp-empty">' + esc(res && res.error ? res.error : '班表載入失敗') + '</div>';
+      return;
+    }
+    renderSched(res);
+  });
+}
+function renderSched(res) {
+  var body = document.getElementById('sp-body');
+  var s = res.shifts;
+  var curShift = document.getElementById('f-shift').value;
+  var html = '';
+  if (!s) {
+    html += '<div class="sp-empty">此院區／職位在該日期沒有班表資料</div>';
+  } else {
+    var rows = [
+      ['早班', s.morning, curShift === '早班'],
+      ['午班', s.noon, curShift === '午班'],
+      ['晚班', s.evening, curShift === '晚班'],
+      ['全天', s.attendance, curShift === '全天' || (s.attendance && s.attendance.length > 0)]
+    ];
+    var shown = 0;
+    rows.forEach(function (r) {
+      var names = r[1] || [];
+      if (names.length === 0) return;
+      shown++;
+      html += '<div class="sp-row' + (r[2] ? ' hl' : '') + '"><div class="sp-shift">' + r[0] + '</div><div class="sp-names">' + esc(names.join('、')) + (r[2] ? '　← 接班' : '') + '</div></div>';
+    });
+    if ((s.off || []).length > 0) {
+      html += '<div class="sp-row off"><div class="sp-shift">休假</div><div class="sp-names">' + esc(s.off.join('、')) + '</div></div>';
+    }
+    if (shown === 0) html += '<div class="sp-empty">該日期無人排班</div>';
+  }
+  if ((res.adjustments || []).length > 0) {
+    html += '<div class="sp-adj">⚠️ 當日異動：';
+    res.adjustments.forEach(function (a) {
+      var modeName = a.mode === 'leave' ? '請假' : (a.mode === 'swap' ? '換班' : (a.mode === 'support' ? '支援' : a.mode));
+      html += '<br>・' + esc(a.shift) + '班 ' + esc(a.original) + '（' + esc(modeName) + (a.reason ? '：' + esc(a.reason) : '') + '）' + (a.cover ? ' → 由 ' + esc(a.cover) + ' 代理' : '');
+    });
+    html += '</div>';
+  }
+  body.innerHTML = html;
 }
 function setPriority(p) {
   _priority = p;
@@ -496,38 +638,39 @@ function setPriority(p) {
 }
 function buildTargetOptions() {
   var clinic = document.getElementById('f-clinic').value;
+  var g = document.getElementById('f-group').value;
   var sel = document.getElementById('f-target');
   var opts = '<option value="">— 請選擇人員 —</option>';
-  var inClinic = STAFF.filter(function (s) { return s.clinic === clinic && s.empId !== USER.empId; });
-  var others = STAFF.filter(function (s) { return s.clinic !== clinic && s.empId !== USER.empId; });
-  if (inClinic.length > 0) {
-    opts += '<optgroup label="' + esc(clinic) + '">';
-    inClinic.forEach(function (s) {
-      opts += '<option value="' + esc(s.empId) + '">' + esc(s.name) + '（' + esc(s.group) + '・' + esc(s.title) + '）</option>';
+  // 依接收院區篩選，再依職位分類（選「全部職位」時依職位分組顯示）
+  var inClinic = STAFF.filter(function (s) {
+    return s.clinic === clinic && s.empId !== USER.empId;
+  });
+  var groupsToShow = g === '全部' ? GROUPS : [g];
+  groupsToShow.forEach(function (grp) {
+    var members = inClinic.filter(function (s) { return s.group === grp; });
+    if (members.length === 0) return;
+    opts += '<optgroup label="' + esc(grp) + '">';
+    members.forEach(function (s) {
+      opts += '<option value="' + esc(s.empId) + '">' + esc(s.name) + '（' + esc(s.title) + '）</option>';
     });
     opts += '</optgroup>';
-  }
-  if (others.length > 0) {
-    opts += '<optgroup label="其他院區">';
-    others.forEach(function (s) {
-      opts += '<option value="' + esc(s.empId) + '">' + esc(s.name) + '（' + esc(s.clinic) + '・' + esc(s.group) + '）</option>';
-    });
-    opts += '</optgroup>';
-  }
+  });
   sel.innerHTML = opts;
 }
 function submitHandover() {
   var sbarS = document.getElementById('f-s').value.trim();
   if (!sbarS) { toast('S（現況）為必填欄位', 'err'); return; }
   var clinic = document.getElementById('f-clinic').value;
-  var targetId = '', targetName = '', toGroup = USER.group;
+  var selGroup = document.getElementById('f-group').value;
+  var targetId = '', targetName = '';
+  var toGroup = selGroup === '全部' ? USER.group : selGroup;
   if (_targetType === '指定個人') {
     targetId = document.getElementById('f-target').value;
     if (!targetId) { toast('請選擇指定對象', 'err'); return; }
     var t = null;
     for (var i = 0; i < STAFF.length; i++) { if (STAFF[i].empId === targetId) { t = STAFF[i]; break; } }
     targetName = t ? t.name : '';
-    toGroup = t ? t.group : USER.group;
+    toGroup = t ? t.group : toGroup;
   }
   var btn = document.getElementById('f-submit');
   btn.disabled = true; btn.textContent = '送出中…';
