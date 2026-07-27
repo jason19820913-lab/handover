@@ -315,7 +315,7 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
  * ====================================================== */
 var API = 'https://script.google.com/macros/s/AKfycbyehaxZzExQI6VcpZgR0dI3joTuHg8L7uUOmQtfa_OrH_rOq2KjOwkKHHm3YR3SGHkncA/exec';
 
-var GROUPS = ['醫師', '護理師', '藥師', '櫃檯', '其他'];
+var GROUPS = ['醫師', '護理師', '藥師', '櫃檯', '行政', '其他'];
 var USER = null, CLINICS = [], STAFF = [];
 var _inboxRecs = [], _sentRecs = [], _allRecs = [];
 var _inboxSeg = 'pending';
@@ -438,7 +438,9 @@ function renderCard(r, idx, showSign) {
     : '<span class="pill unsigned">待簽收</span>';
   var target = r.targetType === '指定個人'
     ? '指定 <b>' + esc(r.targetName) + '</b>'
-    : esc(r.toClinic) + '・' + esc(r.toGroup) + ' 下一班';
+    : (r.targetType === '全體'
+      ? esc(r.toClinic) + '・' + esc(r.toGroup) + ' <b>全體</b>'
+      : esc(r.toClinic) + '・' + esc(r.toGroup) + ' 下一班');
   var html = '<div class="hcard p-' + pc + '">';
   html += '<div class="hc-top">';
   html += '<span class="pill ' + pc + '">' + esc(r.priority) + '</span>';
@@ -577,7 +579,7 @@ function loadSched() {
   var date = schedDateStr(_schedDay);
   document.getElementById('sp-title').textContent = '📅 ' + clinic + '・' + g + ' 班表（' + date + '）';
   var body = document.getElementById('sp-body');
-  if (g === '醫師' || g === '其他') {
+  if (g === '醫師' || g === '行政' || g === '其他') {
     body.innerHTML = '<div class="sp-empty">「' + esc(g) + '」職位不在排班系統中，無班表可顯示</div>';
     return;
   }
@@ -641,6 +643,9 @@ function buildTargetOptions() {
   var g = document.getElementById('f-group').value;
   var sel = document.getElementById('f-target');
   var opts = '<option value="">— 請選擇人員 —</option>';
+  if (g !== '全部') {
+    opts += '<option value="__ALL__">📢 ' + esc(g) + '全體（此院區不指定個人）</option>';
+  }
   // 依接收院區篩選，再依職位分類（選「全部職位」時依職位分組顯示）
   var inClinic = STAFF.filter(function (s) {
     return s.clinic === clinic && s.empId !== USER.empId;
@@ -664,13 +669,21 @@ function submitHandover() {
   var selGroup = document.getElementById('f-group').value;
   var targetId = '', targetName = '';
   var toGroup = selGroup === '全部' ? USER.group : selGroup;
+  var targetType = _targetType;
   if (_targetType === '指定個人') {
     targetId = document.getElementById('f-target').value;
-    if (!targetId) { toast('請選擇指定對象', 'err'); return; }
-    var t = null;
-    for (var i = 0; i < STAFF.length; i++) { if (STAFF[i].empId === targetId) { t = STAFF[i]; break; } }
-    targetName = t ? t.name : '';
-    toGroup = t ? t.group : toGroup;
+    if (!targetId) { toast('請選擇指定對象或選「全體」', 'err'); return; }
+    if (targetId === '__ALL__') {
+      // 交給該院區該職位全體
+      targetType = '全體';
+      targetId = '';
+      targetName = toGroup + '全體';
+    } else {
+      var t = null;
+      for (var i = 0; i < STAFF.length; i++) { if (STAFF[i].empId === targetId) { t = STAFF[i]; break; } }
+      targetName = t ? t.name : '';
+      toGroup = t ? t.group : toGroup;
+    }
   }
   var btn = document.getElementById('f-submit');
   btn.disabled = true; btn.textContent = '送出中…';
@@ -678,7 +691,7 @@ function submitHandover() {
     action: 'addHandover',
     toClinic: clinic, toGroup: toGroup,
     shift: document.getElementById('f-shift').value,
-    targetType: _targetType, targetId: targetId, targetName: targetName,
+    targetType: targetType, targetId: targetId, targetName: targetName,
     fromId: USER.empId, fromName: USER.name, fromGroup: USER.group, fromClinic: USER.clinic,
     priority: _priority,
     sbarI: document.getElementById('f-i').value.trim(),
