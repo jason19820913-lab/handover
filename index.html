@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>金鶯診所交班系統</title>
+<style>
+:root{
+  --brand:#d97706; --brand-dk:#b45309; --brand-lt:#fef3c7;
+  --ink:#1f2937; --sub:#6b7280; --line:#e5e7eb; --bg:#f7f5f2; --card:#ffffff;
+  --ok:#059669; --ok-lt:#d1fae5; --warn:#d97706; --warn-lt:#fef3c7;
+  --urgent:#dc2626; --urgent-lt:#fee2e2; --info:#2563eb; --info-lt:#dbeafe;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif}
+body{background:var(--bg);color:var(--ink);font-size:15px;-webkit-font-smoothing:antialiased}
+button{cursor:pointer;font-family:inherit}
+input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
+
+/* ---------- 登入頁 ---------- */
+#login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:linear-gradient(160deg,#fffbeb 0%,#f7f5f2 55%,#fde8c8 100%)}
+.login-card{background:var(--card);border-radius:18px;padding:38px 30px;width:100%;max-width:400px;
+  box-shadow:0 12px 40px rgba(180,83,9,.12);border:1px solid #f3e8d8}
+.login-logo{text-align:center;margin-bottom:6px;font-size:42px}
+.login-title{text-align:center;font-size:22px;font-weight:800;letter-spacing:2px}
+.login-sub{text-align:center;color:var(--sub);font-size:13px;margin:6px 0 26px}
+.fld{margin-bottom:16px}
+.fld label{display:block;font-size:13px;font-weight:700;color:#4b5563;margin-bottom:6px}
+.fld input,.fld select,.fld textarea{width:100%;padding:11px 13px;border:1.5px solid var(--line);
+  border-radius:10px;background:#fff;outline:none;transition:border .15s}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--brand)}
+.btn{display:block;width:100%;padding:13px;border:none;border-radius:10px;background:var(--brand);
+  color:#fff;font-size:16px;font-weight:800;letter-spacing:3px;transition:background .15s}
+.btn:hover{background:var(--brand-dk)}
+.btn:disabled{background:#d1d5db;cursor:not-allowed}
+.login-err{color:var(--urgent);font-size:13px;text-align:center;margin-top:12px;min-height:18px}
+
+/* ---------- 主框架 ---------- */
+#app{display:none;max-width:860px;margin:0 auto;padding-bottom:90px}
+.topbar{background:var(--card);border-bottom:1px solid var(--line);padding:14px 18px;
+  display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+.topbar .t-title{font-size:17px;font-weight:800;letter-spacing:1px}
+.topbar .t-title span{color:var(--brand)}
+.t-user{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub)}
+.t-badge{background:var(--brand-lt);color:var(--brand-dk);border-radius:20px;padding:3px 10px;font-weight:700}
+.logout{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 10px;font-size:12px;color:var(--sub)}
+
+.tabs{display:flex;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:57px;z-index:19}
+.tab{flex:1;text-align:center;padding:12px 4px;font-size:14px;font-weight:700;color:var(--sub);
+  border:none;background:none;border-bottom:3px solid transparent;position:relative}
+.tab.active{color:var(--brand-dk);border-bottom-color:var(--brand)}
+.tab .cnt{position:absolute;top:6px;right:14%;background:var(--urgent);color:#fff;font-size:10px;
+  border-radius:10px;padding:1px 6px;font-weight:800}
+.page{display:none;padding:16px}
+.page.active{display:block}
+.sec-note{font-size:12.5px;color:var(--sub);margin:2px 0 14px;line-height:1.6}
+
+/* ---------- 卡片 ---------- */
+.hcard{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--brand);
+  border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.hcard.p-urgent{border-left-color:var(--urgent)}
+.hcard.p-warn{border-left-color:var(--warn)}
+.hcard.p-normal{border-left-color:#9ca3af}
+.hc-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.pill{font-size:11.5px;font-weight:800;border-radius:20px;padding:2px 10px}
+.pill.urgent{background:var(--urgent-lt);color:var(--urgent)}
+.pill.warn{background:var(--warn-lt);color:var(--warn)}
+.pill.normal{background:#f3f4f6;color:#6b7280}
+.pill.signed{background:var(--ok-lt);color:var(--ok)}
+.pill.unsigned{background:var(--info-lt);color:var(--info)}
+.pill.shift{background:#ede9fe;color:#7c3aed}
+.hc-meta{font-size:12.5px;color:var(--sub);margin-bottom:10px;line-height:1.7}
+.hc-meta b{color:var(--ink)}
+.isbar{border-top:1px dashed var(--line);padding-top:10px;display:grid;gap:7px}
+.isbar-row{display:flex;gap:9px;font-size:13.5px;line-height:1.65}
+.isbar-key{flex:0 0 22px;height:22px;border-radius:6px;background:var(--brand-lt);color:var(--brand-dk);
+  font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.isbar-txt{white-space:pre-wrap;word-break:break-word;flex:1}
+.hc-foot{margin-top:12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.hc-sign-info{font-size:12px;color:var(--ok);font-weight:700}
+.sign-btn{background:var(--ok);color:#fff;border:none;border-radius:9px;padding:9px 22px;font-size:14px;font-weight:800}
+.sign-btn:hover{background:#047857}
+.empty{padding:50px 10px;text-align:center;color:#9ca3af;font-size:14px}
+.empty .em-ico{font-size:38px;margin-bottom:10px}
+
+/* ---------- 建立交班表單 ---------- */
+.form-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:520px){.grid2{grid-template-columns:1fr}}
+.radio-row{display:flex;gap:10px}
+.radio-opt{flex:1;border:1.5px solid var(--line);border-radius:10px;padding:10px;text-align:center;
+  font-size:14px;font-weight:700;color:var(--sub);background:#fff}
+.radio-opt.sel{border-color:var(--brand);color:var(--brand-dk);background:var(--brand-lt)}
+.isbar-fld{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:#fffdfa}
+.isbar-fld .if-head{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+.if-letter{width:30px;height:30px;border-radius:9px;background:var(--brand);color:#fff;font-weight:800;
+  font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.if-name{font-weight:800;font-size:14.5px}
+.if-req{color:var(--urgent);font-size:12px;margin-left:2px}
+.if-hint{font-size:12px;color:var(--sub);line-height:1.6;margin-bottom:8px;padding-left:39px}
+.isbar-fld textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;
+  min-height:64px;resize:vertical;outline:none;line-height:1.6}
+.isbar-fld textarea:focus{border-color:var(--brand)}
+.prio-row{display:flex;gap:10px;margin-bottom:18px}
+.prio{flex:1;border:1.5px solid var(--line);border-radius:10px;padding:9px;text-align:center;font-weight:800;font-size:14px;background:#fff;color:var(--sub)}
+.prio.sel-normal{border-color:#9ca3af;background:#f3f4f6;color:#374151}
+.prio.sel-warn{border-color:var(--warn);background:var(--warn-lt);color:var(--warn)}
+.prio.sel-urgent{border-color:var(--urgent);background:var(--urgent-lt);color:var(--urgent)}
+
+/* ---------- 總覽 ---------- */
+.ov-bar{display:flex;gap:10px;margin-bottom:12px}
+.ov-bar select{flex:1;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff}
+.grp-tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px}
+.grp-tab{border:1.5px solid var(--line);background:#fff;border-radius:20px;padding:7px 16px;
+  font-size:13.5px;font-weight:700;color:var(--sub);white-space:nowrap}
+.grp-tab.active{background:var(--brand);border-color:var(--brand);color:#fff}
+
+/* ---------- 其他 ---------- */
+.seg-tabs{display:flex;gap:8px;margin-bottom:14px}
+.seg{border:1.5px solid var(--line);background:#fff;border-radius:20px;padding:7px 18px;font-size:13.5px;font-weight:700;color:var(--sub)}
+.seg.active{background:#1f2937;border-color:#1f2937;color:#fff}
+.loading{text-align:center;padding:40px;color:var(--sub)}
+.spinner{display:inline-block;width:26px;height:26px;border:3px solid var(--brand-lt);
+  border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;
+  padding:11px 22px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:99;max-width:88%;text-align:center}
+#toast.show{opacity:1}
+#toast.err{background:var(--urgent)}
+.refresh-btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 14px;font-size:13px;color:var(--sub);font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- ================= 登入頁 ================= -->
+<div id="login-page">
+  <div class="login-card">
+    <div class="login-logo">🐦</div>
+    <div class="login-title">金鶯診所交班系統</div>
+    <div class="login-sub">Elite Clinic Handover System・ISBAR</div>
+    <div class="fld">
+      <label>員工編號</label>
+      <input id="li-id" type="text" inputmode="numeric" autocomplete="username" placeholder="例如：0123" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="fld">
+      <label>密碼</label>
+      <input id="li-pwd" type="password" autocomplete="current-password" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn" id="li-btn" onclick="doLogin()">登 入</button>
+    <div class="login-err" id="li-err"></div>
+  </div>
+</div>
+
+<!-- ================= 主畫面 ================= -->
+<div id="app">
+  <div class="topbar">
+    <div class="t-title">🐦 金鶯<span>交班</span></div>
+    <div class="t-user">
+      <span class="t-badge" id="u-badge"></span>
+      <span id="u-name"></span>
+      <button class="logout" onclick="doLogout()">登出</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tab-inbox" onclick="switchTab('inbox')">📥 收件匣<span class="cnt" id="inbox-cnt" style="display:none"></span></button>
+    <button class="tab" id="tab-create" onclick="switchTab('create')">✏️ 建立交班</button>
+    <button class="tab" id="tab-sent" onclick="switchTab('sent')">📤 已送出</button>
+    <button class="tab" id="tab-all" onclick="switchTab('all')">🗂 總覽</button>
+  </div>
+
+  <!-- 收件匣 -->
+  <div class="page active" id="page-inbox">
+    <div class="sec-note" id="inbox-note"></div>
+    <div class="seg-tabs">
+      <button class="seg active" id="seg-pending" onclick="setInboxSeg('pending')">待簽收</button>
+      <button class="seg" id="seg-done" onclick="setInboxSeg('done')">已簽收</button>
+      <span style="flex:1"></span>
+      <button class="refresh-btn" onclick="loadInbox()">↻ 重新整理</button>
+    </div>
+    <div id="inbox-list"></div>
+  </div>
+
+  <!-- 建立交班 -->
+  <div class="page" id="page-create">
+    <div class="form-card">
+      <div class="grid2">
+        <div class="fld">
+          <label>接收院區</label>
+          <select id="f-clinic"></select>
+        </div>
+        <div class="fld">
+          <label>班別</label>
+          <select id="f-shift">
+            <option value="早班">早班</option>
+            <option value="午班">午班</option>
+            <option value="晚班">晚班</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld">
+        <label>交班對象</label>
+        <div class="radio-row">
+          <button class="radio-opt sel" id="tt-shift" onclick="setTargetType('下一班')">交給下一班<br><small id="tt-shift-sub"></small></button>
+          <button class="radio-opt" id="tt-person" onclick="setTargetType('指定個人')">指定特定對象<br><small>可跨職位選擇</small></button>
+        </div>
+      </div>
+      <div class="fld" id="f-target-wrap" style="display:none">
+        <label>指定對象（先選院區篩選，再選人員）</label>
+        <select id="f-target"></select>
+      </div>
+
+      <div class="fld">
+        <label>優先程度</label>
+        <div class="prio-row">
+          <button class="prio sel-normal" id="pr-一般" onclick="setPriority('一般')">一般</button>
+          <button class="prio" id="pr-重要" onclick="setPriority('重要')">重要</button>
+          <button class="prio" id="pr-緊急" onclick="setPriority('緊急')">緊急</button>
+        </div>
+      </div>
+
+      <!-- ISBAR -->
+      <div class="isbar-fld">
+        <div class="if-head"><div class="if-letter">I</div><div class="if-name">Identify｜身分識別</div></div>
+        <div class="if-hint">這則交班與「誰／什麼事」有關？病人請寫姓名＋病歷號；行政事務請寫事項名稱與相關人員。</div>
+        <textarea id="f-i" placeholder="例：王小明（病歷號 0123）／ 例：明日疫苗到貨點收事宜"></textarea>
+      </div>
+      <div class="isbar-fld">
+        <div class="if-head"><div class="if-letter">S</div><div class="if-name">Situation｜現況<span class="if-req">＊必填</span></div></div>
+        <div class="if-hint">現在發生什麼事？目前的狀況、主訴或問題是什麼？</div>
+        <textarea id="f-s" placeholder="例：病人施打針劑後注射部位紅腫，目前冰敷觀察中"></textarea>
+      </div>
+      <div class="isbar-fld">
+        <div class="if-head"><div class="if-letter">B</div><div class="if-name">Background｜背景</div></div>
+        <div class="if-hint">相關背景資訊：病史、用藥、過敏史、先前處理經過、事情的來龍去脈。</div>
+        <textarea id="f-b" placeholder="例：第 3 次施打，前兩次無不良反應；有青黴素過敏史"></textarea>
+      </div>
+      <div class="isbar-fld">
+        <div class="if-head"><div class="if-letter">A</div><div class="if-name">Assessment｜評估</div></div>
+        <div class="if-hint">你的專業評估與判斷：目前生命徵象／狀態如何？可能的原因？嚴重程度？</div>
+        <textarea id="f-a" placeholder="例：評估為局部注射反應，無全身性過敏徵象，生命徵象穩定"></textarea>
+      </div>
+      <div class="isbar-fld">
+        <div class="if-head"><div class="if-letter">R</div><div class="if-name">Recommendation｜建議</div></div>
+        <div class="if-hint">建議接班者做什麼？待辦事項、追蹤時間點、需要注意或回報的狀況。</div>
+        <textarea id="f-r" placeholder="例：請 30 分鐘後再評估紅腫範圍，若擴大請通知值班醫師"></textarea>
+      </div>
+
+      <button class="btn" id="f-submit" onclick="submitHandover()">送出交班</button>
+    </div>
+  </div>
+
+  <!-- 已送出 -->
+  <div class="page" id="page-sent">
+    <div class="sec-note">您送出的交班記錄，可追蹤是否已被簽收。</div>
+    <div class="seg-tabs">
+      <span style="flex:1"></span>
+      <button class="refresh-btn" onclick="loadSent()">↻ 重新整理</button>
+    </div>
+    <div id="sent-list"></div>
+  </div>
+
+  <!-- 總覽 -->
+  <div class="page" id="page-all">
+    <div class="sec-note">依院區與職位瀏覽全部交班記錄。</div>
+    <div class="ov-bar">
+      <select id="ov-clinic" onchange="loadAll()"></select>
+      <button class="refresh-btn" onclick="loadAll()">↻</button>
+    </div>
+    <div class="grp-tabs" id="ov-groups"></div>
+    <div id="all-list"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ======================================================
+ * 部署後請將下方 API 換成你的 Apps Script 網頁應用程式網址
+ * ====================================================== */
+var API = 'https://script.google.com/macros/s/AKfycbyehaxZzExQI6VcpZgR0dI3joTuHg8L7uUOmQtfa_OrH_rOq2KjOwkKHHm3YR3SGHkncA/exec';
+
+var GROUPS = ['醫師', '護理師', '藥師', '櫃檯', '其他'];
+var USER = null, CLINICS = [], STAFF = [];
+var _inboxRecs = [], _sentRecs = [], _allRecs = [];
+var _inboxSeg = 'pending';
+var _targetType = '下一班', _priority = '一般', _ovGroup = '醫師';
+
+/* ---------- 通用 GET ---------- */
+function get(params, cb) {
+  var q = Object.keys(params).map(function (k) {
+    return encodeURIComponent(k) + '=' + encodeURIComponent(params[k] == null ? '' : params[k]);
+  }).join('&');
+  fetch(API + '?' + q)
+    .then(function (r) { return r.json(); })
+    .then(cb)
+    .catch(function (e) { toast('連線失敗，請確認網路或 API 設定', 'err'); console.error(e); cb(null); });
+}
+function toast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = type === 'err' ? 'show err' : 'show';
+  setTimeout(function () { t.className = ''; }, 2600);
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+/* 安全的本機儲存（不可用時自動降級為記憶體） */
+var _mem = {};
+function store(k, v) { try { localStorage.setItem(k, v); } catch (e) { _mem[k] = v; } }
+function load(k) { try { return localStorage.getItem(k); } catch (e) { return _mem[k] || null; } }
+function removeStore(k) { try { localStorage.removeItem(k); } catch (e) { delete _mem[k]; } }
+
+/* ---------- 登入 ---------- */
+function doLogin() {
+  var id = document.getElementById('li-id').value.trim();
+  var pwd = document.getElementById('li-pwd').value.trim();
+  var err = document.getElementById('li-err');
+  if (!id || !pwd) { err.textContent = '請輸入員工編號與密碼'; return; }
+  var btn = document.getElementById('li-btn');
+  btn.disabled = true; btn.textContent = '登入中…'; err.textContent = '';
+  get({ action: 'login', empId: id, pwd: pwd }, function (res) {
+    btn.disabled = false; btn.textContent = '登 入';
+    if (!res) return;
+    if (res.error) { err.textContent = res.error; return; }
+    USER = res.user; CLINICS = res.clinics || []; STAFF = res.staff || [];
+    store('ho_user', JSON.stringify({ user: USER, clinics: CLINICS, staff: STAFF }));
+    enterApp();
+  });
+}
+function doLogout() {
+  removeStore('ho_user');
+  USER = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('li-pwd').value = '';
+}
+function tryRestore() {
+  var raw = load('ho_user');
+  if (!raw) return;
+  try {
+    var d = JSON.parse(raw);
+    if (d && d.user && d.user.empId) {
+      USER = d.user; CLINICS = d.clinics || []; STAFF = d.staff || [];
+      enterApp();
+    }
+  } catch (e) {}
+}
+
+/* ---------- 進入主畫面 ---------- */
+function enterApp() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('u-name').textContent = USER.name;
+  document.getElementById('u-badge').textContent = USER.clinic + '・' + USER.group;
+  document.getElementById('inbox-note').textContent =
+    '顯示「' + USER.clinic + '／' + USER.group + '」的下一班交班，以及指定給您本人的交班。';
+  document.getElementById('tt-shift-sub').textContent = USER.clinic + '・' + USER.group;
+
+  // 接收院區下拉
+  var cSel = document.getElementById('f-clinic');
+  cSel.innerHTML = CLINICS.map(function (c) {
+    return '<option value="' + esc(c) + '"' + (c === USER.clinic ? ' selected' : '') + '>' + esc(c) + '</option>';
+  }).join('');
+  cSel.onchange = buildTargetOptions;
+  buildTargetOptions();
+
+  // 總覽院區下拉
+  var oSel = document.getElementById('ov-clinic');
+  oSel.innerHTML = CLINICS.map(function (c) {
+    return '<option value="' + esc(c) + '"' + (c === USER.clinic ? ' selected' : '') + '>' + esc(c) + '</option>';
+  }).join('');
+  // 總覽職位分頁
+  _ovGroup = GROUPS.indexOf(USER.group) >= 0 ? USER.group : '醫師';
+  renderOvGroups();
+
+  switchTab('inbox');
+}
+
+/* ---------- 分頁切換 ---------- */
+function switchTab(name) {
+  ['inbox', 'create', 'sent', 'all'].forEach(function (t) {
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+    document.getElementById('page-' + t).classList.toggle('active', t === name);
+  });
+  if (name === 'inbox') loadInbox();
+  if (name === 'sent') loadSent();
+  if (name === 'all') loadAll();
+}
+
+/* ---------- 卡片渲染 ---------- */
+function prioClass(p) { return p === '緊急' ? 'urgent' : (p === '重要' ? 'warn' : 'normal'); }
+function renderCard(r, idx, showSign) {
+  var pc = prioClass(r.priority);
+  var statusPill = r.status === '已簽收'
+    ? '<span class="pill signed">✓ 已簽收</span>'
+    : '<span class="pill unsigned">待簽收</span>';
+  var target = r.targetType === '指定個人'
+    ? '指定 <b>' + esc(r.targetName) + '</b>'
+    : esc(r.toClinic) + '・' + esc(r.toGroup) + ' 下一班';
+  var html = '<div class="hcard p-' + pc + '">';
+  html += '<div class="hc-top">';
+  html += '<span class="pill ' + pc + '">' + esc(r.priority) + '</span>';
+  if (r.shift) html += '<span class="pill shift">' + esc(r.shift) + '</span>';
+  html += statusPill;
+  html += '<span style="flex:1"></span><span style="font-size:12px;color:#9ca3af">' + esc(r.created) + '</span>';
+  html += '</div>';
+  html += '<div class="hc-meta"><b>' + esc(r.fromName) + '</b>（' + esc(r.fromClinic) + '・' + esc(r.fromGroup) + '）交班給 ' + target + '</div>';
+  html += '<div class="isbar">';
+  var rows = [['I', r.sbarI], ['S', r.sbarS], ['B', r.sbarB], ['A', r.sbarA], ['R', r.sbarR]];
+  rows.forEach(function (x) {
+    if (!x[1]) return;
+    html += '<div class="isbar-row"><div class="isbar-key">' + x[0] + '</div><div class="isbar-txt">' + esc(x[1]) + '</div></div>';
+  });
+  html += '</div>';
+  if (r.status === '已簽收') {
+    html += '<div class="hc-foot"><span class="hc-sign-info">✓ ' + esc(r.signName) + ' 已於 ' + esc(r.signTime) + ' 簽收</span></div>';
+  } else if (showSign) {
+    html += '<div class="hc-foot"><span></span><button class="sign-btn" onclick="signRec(' + idx + ')">簽收</button></div>';
+  }
+  html += '</div>';
+  return html;
+}
+function renderEmpty(msg) {
+  return '<div class="empty"><div class="em-ico">🕊️</div>' + esc(msg) + '</div>';
+}
+function renderLoading() {
+  return '<div class="loading"><div class="spinner"></div><div>載入中…</div></div>';
+}
+
+/* ---------- 收件匣 ---------- */
+function setInboxSeg(seg) {
+  _inboxSeg = seg;
+  document.getElementById('seg-pending').classList.toggle('active', seg === 'pending');
+  document.getElementById('seg-done').classList.toggle('active', seg === 'done');
+  renderInbox();
+}
+function loadInbox() {
+  document.getElementById('inbox-list').innerHTML = renderLoading();
+  get({ action: 'getHandovers', mode: 'inbox', empId: USER.empId, clinic: USER.clinic, group: USER.group }, function (res) {
+    if (!res || res.error) {
+      document.getElementById('inbox-list').innerHTML = renderEmpty(res && res.error ? res.error : '載入失敗');
+      return;
+    }
+    _inboxRecs = res.records || [];
+    renderInbox();
+  });
+}
+function renderInbox() {
+  var pending = _inboxRecs.filter(function (r) { return r.status !== '已簽收'; });
+  var done = _inboxRecs.filter(function (r) { return r.status === '已簽收'; });
+  var cnt = document.getElementById('inbox-cnt');
+  if (pending.length > 0) { cnt.style.display = 'inline'; cnt.textContent = pending.length; }
+  else cnt.style.display = 'none';
+
+  var list = _inboxSeg === 'pending' ? pending : done;
+  var box = document.getElementById('inbox-list');
+  if (list.length === 0) {
+    box.innerHTML = renderEmpty(_inboxSeg === 'pending' ? '目前沒有待簽收的交班' : '尚無已簽收記錄');
+    return;
+  }
+  var html = '';
+  list.forEach(function (r) {
+    var idx = _inboxRecs.indexOf(r);
+    html += renderCard(r, idx, _inboxSeg === 'pending');
+  });
+  box.innerHTML = html;
+}
+function signRec(idx) {
+  var r = _inboxRecs[idx];
+  if (!r) { toast('找不到記錄，請重新整理', 'err'); return; }
+  get({ action: 'signHandover', recId: r.recId, empId: USER.empId, name: USER.name }, function (res) {
+    if (!res) return;
+    if (res.error) { toast(res.error, 'err'); loadInbox(); return; }
+    toast('已完成簽收 ✓');
+    loadInbox();
+  });
+}
+
+/* ---------- 建立交班 ---------- */
+function setTargetType(t) {
+  _targetType = t;
+  document.getElementById('tt-shift').classList.toggle('sel', t === '下一班');
+  document.getElementById('tt-person').classList.toggle('sel', t === '指定個人');
+  document.getElementById('f-target-wrap').style.display = t === '指定個人' ? 'block' : 'none';
+}
+function setPriority(p) {
+  _priority = p;
+  ['一般', '重要', '緊急'].forEach(function (x) {
+    var el = document.getElementById('pr-' + x);
+    el.className = 'prio';
+    if (x === p) el.classList.add(p === '緊急' ? 'sel-urgent' : (p === '重要' ? 'sel-warn' : 'sel-normal'));
+  });
+}
+function buildTargetOptions() {
+  var clinic = document.getElementById('f-clinic').value;
+  var sel = document.getElementById('f-target');
+  var opts = '<option value="">— 請選擇人員 —</option>';
+  var inClinic = STAFF.filter(function (s) { return s.clinic === clinic && s.empId !== USER.empId; });
+  var others = STAFF.filter(function (s) { return s.clinic !== clinic && s.empId !== USER.empId; });
+  if (inClinic.length > 0) {
+    opts += '<optgroup label="' + esc(clinic) + '">';
+    inClinic.forEach(function (s) {
+      opts += '<option value="' + esc(s.empId) + '">' + esc(s.name) + '（' + esc(s.group) + '・' + esc(s.title) + '）</option>';
+    });
+    opts += '</optgroup>';
+  }
+  if (others.length > 0) {
+    opts += '<optgroup label="其他院區">';
+    others.forEach(function (s) {
+      opts += '<option value="' + esc(s.empId) + '">' + esc(s.name) + '（' + esc(s.clinic) + '・' + esc(s.group) + '）</option>';
+    });
+    opts += '</optgroup>';
+  }
+  sel.innerHTML = opts;
+}
+function submitHandover() {
+  var sbarS = document.getElementById('f-s').value.trim();
+  if (!sbarS) { toast('S（現況）為必填欄位', 'err'); return; }
+  var clinic = document.getElementById('f-clinic').value;
+  var targetId = '', targetName = '', toGroup = USER.group;
+  if (_targetType === '指定個人') {
+    targetId = document.getElementById('f-target').value;
+    if (!targetId) { toast('請選擇指定對象', 'err'); return; }
+    var t = null;
+    for (var i = 0; i < STAFF.length; i++) { if (STAFF[i].empId === targetId) { t = STAFF[i]; break; } }
+    targetName = t ? t.name : '';
+    toGroup = t ? t.group : USER.group;
+  }
+  var btn = document.getElementById('f-submit');
+  btn.disabled = true; btn.textContent = '送出中…';
+  get({
+    action: 'addHandover',
+    toClinic: clinic, toGroup: toGroup,
+    shift: document.getElementById('f-shift').value,
+    targetType: _targetType, targetId: targetId, targetName: targetName,
+    fromId: USER.empId, fromName: USER.name, fromGroup: USER.group, fromClinic: USER.clinic,
+    priority: _priority,
+    sbarI: document.getElementById('f-i').value.trim(),
+    sbarS: sbarS,
+    sbarB: document.getElementById('f-b').value.trim(),
+    sbarA: document.getElementById('f-a').value.trim(),
+    sbarR: document.getElementById('f-r').value.trim()
+  }, function (res) {
+    btn.disabled = false; btn.textContent = '送出交班';
+    if (!res) return;
+    if (res.error) { toast(res.error, 'err'); return; }
+    toast('交班已送出 ✓');
+    ['f-i', 'f-s', 'f-b', 'f-a', 'f-r'].forEach(function (id) { document.getElementById(id).value = ''; });
+    setPriority('一般');
+    switchTab('sent');
+  });
+}
+
+/* ---------- 已送出 ---------- */
+function loadSent() {
+  document.getElementById('sent-list').innerHTML = renderLoading();
+  get({ action: 'getHandovers', mode: 'sent', empId: USER.empId }, function (res) {
+    if (!res || res.error) {
+      document.getElementById('sent-list').innerHTML = renderEmpty(res && res.error ? res.error : '載入失敗');
+      return;
+    }
+    _sentRecs = res.records || [];
+    var box = document.getElementById('sent-list');
+    if (_sentRecs.length === 0) { box.innerHTML = renderEmpty('尚未送出任何交班'); return; }
+    var html = '';
+    _sentRecs.forEach(function (r, idx) { html += renderCard(r, idx, false); });
+    box.innerHTML = html;
+  });
+}
+
+/* ---------- 總覽 ---------- */
+function renderOvGroups() {
+  var box = document.getElementById('ov-groups');
+  box.innerHTML = GROUPS.map(function (g) {
+    return '<button class="grp-tab' + (g === _ovGroup ? ' active' : '') + '" onclick="setOvGroup(this.textContent)">' + esc(g) + '</button>';
+  }).join('');
+}
+function setOvGroup(g) {
+  _ovGroup = g;
+  renderOvGroups();
+  loadAll();
+}
+function loadAll() {
+  document.getElementById('all-list').innerHTML = renderLoading();
+  var clinic = document.getElementById('ov-clinic').value;
+  get({ action: 'getHandovers', mode: 'all', clinic: clinic, group: _ovGroup, limit: 100 }, function (res) {
+    if (!res || res.error) {
+      document.getElementById('all-list').innerHTML = renderEmpty(res && res.error ? res.error : '載入失敗');
+      return;
+    }
+    _allRecs = res.records || [];
+    var box = document.getElementById('all-list');
+    if (_allRecs.length === 0) { box.innerHTML = renderEmpty('此院區／職位尚無交班記錄'); return; }
+    var html = '';
+    _allRecs.forEach(function (r, idx) { html += renderCard(r, idx, false); });
+    box.innerHTML = html;
+  });
+}
+
+/* ---------- 啟動 ---------- */
+tryRestore();
+</script>
+</body>
+</html>
