@@ -155,7 +155,7 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
   <div class="login-card">
     <div class="login-logo"><img src="LOGO原始檔_0.jpg" alt="金鶯診所" onerror="this.parentNode.textContent='🐦'"></div>
     <div class="login-title">金鶯診所交班系統</div>
-    <div class="login-sub">Elite Clinic Handover System・ISBAR</div>
+    <div class="login-sub">Elite Clinic Handover System</div>
     <div class="fld">
       <label>員工編號</label>
       <input id="li-id" type="text" inputmode="numeric" autocomplete="username" placeholder="例如：0123" onkeydown="if(event.key==='Enter')doLogin()">
@@ -255,31 +255,10 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
         </div>
       </div>
 
-      <!-- ISBAR -->
-      <div class="isbar-fld">
-        <div class="if-head"><div class="if-letter">I</div><div class="if-name">Identify｜身分識別</div></div>
-        <div class="if-hint">這則交班與「誰／什麼事」有關？病人請寫姓名＋病歷號；行政事務請寫事項名稱與相關人員。</div>
-        <textarea id="f-i" placeholder="例：王小明（病歷號 0123）／ 例：明日疫苗到貨點收事宜"></textarea>
-      </div>
-      <div class="isbar-fld">
-        <div class="if-head"><div class="if-letter">S</div><div class="if-name">Situation｜現況<span class="if-req">＊必填</span></div></div>
-        <div class="if-hint">現在發生什麼事？目前的狀況、主訴或問題是什麼？</div>
-        <textarea id="f-s" placeholder="例：病人施打針劑後注射部位紅腫，目前冰敷觀察中"></textarea>
-      </div>
-      <div class="isbar-fld">
-        <div class="if-head"><div class="if-letter">B</div><div class="if-name">Background｜背景</div></div>
-        <div class="if-hint">相關背景資訊：病史、用藥、過敏史、先前處理經過、事情的來龍去脈。</div>
-        <textarea id="f-b" placeholder="例：第 3 次施打，前兩次無不良反應；有青黴素過敏史"></textarea>
-      </div>
-      <div class="isbar-fld">
-        <div class="if-head"><div class="if-letter">A</div><div class="if-name">Assessment｜評估</div></div>
-        <div class="if-hint">你的專業評估與判斷：目前生命徵象／狀態如何？可能的原因？嚴重程度？</div>
-        <textarea id="f-a" placeholder="例：評估為局部注射反應，無全身性過敏徵象，生命徵象穩定"></textarea>
-      </div>
-      <div class="isbar-fld">
-        <div class="if-head"><div class="if-letter">R</div><div class="if-name">Recommendation｜建議</div></div>
-        <div class="if-hint">建議接班者做什麼？待辦事項、追蹤時間點、需要注意或回報的狀況。</div>
-        <textarea id="f-r" placeholder="例：請 30 分鐘後再評估紅腫範圍，若擴大請通知值班醫師"></textarea>
+      <!-- 交班內容（自由輸入） -->
+      <div class="fld">
+        <label>交班內容 <span style="color:var(--urgent);font-size:12px">＊必填</span></label>
+        <textarea id="f-s" rows="7" style="min-height:160px;resize:vertical;line-height:1.7" placeholder="交班內容請依照人、事、時、地、物進行交班"></textarea>
       </div>
 
       <button class="btn" id="f-submit" onclick="submitHandover()">送出交班</button>
@@ -451,11 +430,17 @@ function renderCard(r, idx, showSign) {
   html += '</div>';
   html += '<div class="hc-meta"><b>' + esc(r.fromName) + '</b>（' + esc(r.fromClinic) + '・' + esc(r.fromGroup) + '）交班給 ' + target + '</div>';
   html += '<div class="isbar">';
-  var rows = [['I', r.sbarI], ['S', r.sbarS], ['B', r.sbarB], ['A', r.sbarA], ['R', r.sbarR]];
-  rows.forEach(function (x) {
-    if (!x[1]) return;
-    html += '<div class="isbar-row"><div class="isbar-key">' + x[0] + '</div><div class="isbar-txt">' + esc(x[1]) + '</div></div>';
-  });
+  if (r.sbarI || r.sbarB || r.sbarA || r.sbarR) {
+    // 舊版 ISBAR 分欄記錄，維持原顯示方式
+    var rows = [['I', r.sbarI], ['S', r.sbarS], ['B', r.sbarB], ['A', r.sbarA], ['R', r.sbarR]];
+    rows.forEach(function (x) {
+      if (!x[1]) return;
+      html += '<div class="isbar-row"><div class="isbar-key">' + x[0] + '</div><div class="isbar-txt">' + esc(x[1]) + '</div></div>';
+    });
+  } else {
+    // 新版單欄交班內容
+    html += '<div class="isbar-txt" style="font-size:13.5px;line-height:1.7">' + esc(r.sbarS) + '</div>';
+  }
   html += '</div>';
   if (r.status === '已簽收') {
     html += '<div class="hc-foot"><span class="hc-sign-info">✓ ' + esc(r.signName) + ' 已於 ' + esc(r.signTime) + ' 簽收</span></div>';
@@ -665,7 +650,7 @@ function buildTargetOptions() {
 }
 function submitHandover() {
   var sbarS = document.getElementById('f-s').value.trim();
-  if (!sbarS) { toast('S（現況）為必填欄位', 'err'); return; }
+  if (!sbarS) { toast('請輸入交班內容', 'err'); return; }
   var clinic = document.getElementById('f-clinic').value;
   var selGroup = document.getElementById('f-group').value;
   var targetId = '', targetName = '';
@@ -695,17 +680,17 @@ function submitHandover() {
     targetType: targetType, targetId: targetId, targetName: targetName,
     fromId: USER.empId, fromName: USER.name, fromGroup: USER.group, fromClinic: USER.clinic,
     priority: _priority,
-    sbarI: document.getElementById('f-i').value.trim(),
+    sbarI: '',
     sbarS: sbarS,
-    sbarB: document.getElementById('f-b').value.trim(),
-    sbarA: document.getElementById('f-a').value.trim(),
-    sbarR: document.getElementById('f-r').value.trim()
+    sbarB: '',
+    sbarA: '',
+    sbarR: ''
   }, function (res) {
     btn.disabled = false; btn.textContent = '送出交班';
     if (!res) return;
     if (res.error) { toast(res.error, 'err'); return; }
     toast('交班已送出 ✓');
-    ['f-i', 'f-s', 'f-b', 'f-a', 'f-r'].forEach(function (id) { document.getElementById(id).value = ''; });
+    document.getElementById('f-s').value = '';
     setPriority('一般');
     switchTab('sent');
   });
