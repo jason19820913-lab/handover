@@ -404,8 +404,15 @@ function switchTab(name) {
     document.getElementById('tab-' + t).classList.toggle('active', t === name);
     document.getElementById('page-' + t).classList.toggle('active', t === name);
   });
-  if (name === 'inbox') loadInbox();
-  if (name === 'sent') loadSent();
+  if (name === 'inbox' || name === 'sent') {
+    if (_mineLoaded) {
+      // 先立即顯示快取，背景同步最新資料
+      renderInbox(); renderSent();
+      loadMine(false);
+    } else {
+      loadMine(true);
+    }
+  }
   if (name === 'all') loadAll();
 }
 
@@ -457,24 +464,39 @@ function renderLoading() {
   return '<div class="loading"><div class="spinner"></div><div>載入中…</div></div>';
 }
 
-/* ---------- 收件匣 ---------- */
+/* ---------- 收件匣＋已送出（合併一次載入，快取優先） ---------- */
+var _mineLoaded = false, _mineLoading = false;
+function loadMine(showSpinner) {
+  if (_mineLoading) return;
+  _mineLoading = true;
+  if (showSpinner && !_mineLoaded) {
+    document.getElementById('inbox-list').innerHTML = renderLoading();
+    document.getElementById('sent-list').innerHTML = renderLoading();
+  }
+  get({ action: 'getHandovers', mode: 'mine', empId: USER.empId, clinic: USER.clinic, group: USER.group }, function (res) {
+    _mineLoading = false;
+    if (!res || res.error) {
+      if (!_mineLoaded) {
+        var msg = res && res.error ? res.error : '載入失敗';
+        document.getElementById('inbox-list').innerHTML = renderEmpty(msg);
+        document.getElementById('sent-list').innerHTML = renderEmpty(msg);
+      }
+      return;
+    }
+    _inboxRecs = res.inbox || [];
+    _sentRecs = res.sent || [];
+    _mineLoaded = true;
+    renderInbox();
+    renderSent();
+  });
+}
 function setInboxSeg(seg) {
   _inboxSeg = seg;
   document.getElementById('seg-pending').classList.toggle('active', seg === 'pending');
   document.getElementById('seg-done').classList.toggle('active', seg === 'done');
   renderInbox();
 }
-function loadInbox() {
-  document.getElementById('inbox-list').innerHTML = renderLoading();
-  get({ action: 'getHandovers', mode: 'inbox', empId: USER.empId, clinic: USER.clinic, group: USER.group }, function (res) {
-    if (!res || res.error) {
-      document.getElementById('inbox-list').innerHTML = renderEmpty(res && res.error ? res.error : '載入失敗');
-      return;
-    }
-    _inboxRecs = res.records || [];
-    renderInbox();
-  });
-}
+function loadInbox() { loadMine(true); }
 function renderInbox() {
   var pending = _inboxRecs.filter(function (r) { return r.status !== '已簽收'; });
   var done = _inboxRecs.filter(function (r) { return r.status === '已簽收'; });
@@ -498,11 +520,13 @@ function renderInbox() {
 function signRec(idx) {
   var r = _inboxRecs[idx];
   if (!r) { toast('找不到記錄，請重新整理', 'err'); return; }
+  // 樂觀更新：畫面立即反應，背景送出並校正
+  r.status = '已簽收'; r.signName = USER.name; r.signTime = '剛剛';
+  renderInbox();
+  toast('已完成簽收 ✓');
   get({ action: 'signHandover', recId: r.recId, empId: USER.empId, name: USER.name }, function (res) {
-    if (!res) return;
-    if (res.error) { toast(res.error, 'err'); loadInbox(); return; }
-    toast('已完成簽收 ✓');
-    loadInbox();
+    if (res && res.error) toast(res.error, 'err');
+    loadMine(false);
   });
 }
 
@@ -690,6 +714,16 @@ function submitHandover() {
     if (!res) return;
     if (res.error) { toast(res.error, 'err'); return; }
     toast('交班已送出 ✓');
+    // 樂觀更新：立即插入已送出清單頂端，背景再同步正式資料
+    _sentRecs.unshift({
+      recId: res.recId || '', date: '', shift: document.getElementById('f-shift').value,
+      toClinic: clinic, toGroup: toGroup,
+      targetType: targetType, targetId: targetId, targetName: targetName,
+      fromId: USER.empId, fromName: USER.name, fromGroup: USER.group, fromClinic: USER.clinic,
+      priority: _priority, sbarI: '', sbarS: sbarS, sbarB: '', sbarA: '', sbarR: '',
+      status: '待簽收', signId: '', signName: '', signTime: '', created: '剛剛'
+    });
+    _mineLoaded = true;
     document.getElementById('f-s').value = '';
     setPriority('一般');
     switchTab('sent');
@@ -697,21 +731,14 @@ function submitHandover() {
 }
 
 /* ---------- 已送出 ---------- */
-function loadSent() {
-  document.getElementById('sent-list').innerHTML = renderLoading();
-  get({ action: 'getHandovers', mode: 'sent', empId: USER.empId }, function (res) {
-    if (!res || res.error) {
-      document.getElementById('sent-list').innerHTML = renderEmpty(res && res.error ? res.error : '載入失敗');
-      return;
-    }
-    _sentRecs = res.records || [];
-    var box = document.getElementById('sent-list');
-    if (_sentRecs.length === 0) { box.innerHTML = renderEmpty('尚未送出任何交班'); return; }
-    var html = '';
-    _sentRecs.forEach(function (r, idx) { html += renderCard(r, idx, false); });
-    box.innerHTML = html;
-  });
+function renderSent() {
+  var box = document.getElementById('sent-list');
+  if (_sentRecs.length === 0) { box.innerHTML = renderEmpty('尚未送出任何交班'); return; }
+  var html = '';
+  _sentRecs.forEach(function (r, idx) { html += renderCard(r, idx, false); });
+  box.innerHTML = html;
 }
+function loadSent() { loadMine(true); }
 
 /* ---------- 總覽 ---------- */
 function renderOvGroups() {
