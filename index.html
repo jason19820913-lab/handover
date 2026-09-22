@@ -81,6 +81,13 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
 .hc-foot{margin-top:12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .hc-sign-info{font-size:12px;color:var(--ok);font-weight:700}
 .sign-btn{background:var(--ok);color:#fff;border:none;border-radius:9px;padding:9px 22px;font-size:14px;font-weight:800}
+.done-btn{background:var(--info);color:#fff;border:none;border-radius:9px;padding:9px 18px;font-size:14px;font-weight:800}
+.done-btn:hover{background:#1d4ed8}
+.sign-status{border-top:1px dashed var(--line);margin-top:10px;padding-top:9px;display:grid;gap:4px}
+.ss-row{font-size:12.5px;line-height:1.7}
+.ss-row.ss-ok{color:var(--ok)}
+.ss-row.ss-wait{color:#b45309}
+.ss-row.ss-done{color:var(--info);font-weight:800}
 .sign-btn:hover{background:#047857}
 .empty{padding:50px 10px;text-align:center;color:#9ca3af;font-size:14px}
 .empty .em-ico{font-size:38px;margin-bottom:10px}
@@ -191,8 +198,8 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
   <div class="page active" id="page-inbox">
     <div class="sec-note" id="inbox-note"></div>
     <div class="seg-tabs">
-      <button class="seg active" id="seg-pending" onclick="setInboxSeg('pending')">待簽收</button>
-      <button class="seg" id="seg-done" onclick="setInboxSeg('done')">已簽收</button>
+      <button class="seg active" id="seg-pending" onclick="setInboxSeg('pending')">待處理</button>
+      <button class="seg" id="seg-done" onclick="setInboxSeg('done')">已結案</button>
       <span style="flex:1"></span>
       <button class="refresh-btn" onclick="loadInbox()">↻ 重新整理</button>
     </div>
@@ -418,11 +425,31 @@ function switchTab(name) {
 
 /* ---------- 卡片渲染 ---------- */
 function prioClass(p) { return p === '緊急' ? 'urgent' : (p === '重要' ? 'warn' : 'normal'); }
+/* 群組交班（下一班/全體）＝多人簽收＋執行完成；指定個人＝單人簽收 */
+function idEq(a, b) {
+  a = String(a || ''); b = String(b || '');
+  return a === b || a.replace(/^0+/, '') === b.replace(/^0+/, '');
+}
+function isGroupRec(r) { return r.targetType === '下一班' || r.targetType === '全體'; }
+function recDone(r) { return isGroupRec(r) ? r.status === '已完成' : r.status === '已簽收'; }
+function recSigns(r) {
+  return (r.signs || []).filter(function (s) { return s.kind === '簽收'; });
+}
+function iSigned(r) {
+  return recSigns(r).some(function (s) { return idEq(s.empId, USER.empId); });
+}
 function renderCard(r, idx, showSign) {
   var pc = prioClass(r.priority);
-  var statusPill = r.status === '已簽收'
-    ? '<span class="pill signed">✓ 已簽收</span>'
-    : '<span class="pill unsigned">待簽收</span>';
+  var statusPill;
+  if (isGroupRec(r)) {
+    statusPill = r.status === '已完成'
+      ? '<span class="pill signed">✔ 已完成</span>'
+      : '<span class="pill unsigned">待處理</span>';
+  } else {
+    statusPill = r.status === '已簽收'
+      ? '<span class="pill signed">✓ 已簽收</span>'
+      : '<span class="pill unsigned">待簽收</span>';
+  }
   var target = r.targetType === '指定個人'
     ? '指定 <b>' + esc(r.targetName) + '</b>'
     : (r.targetType === '全體'
@@ -449,7 +476,34 @@ function renderCard(r, idx, showSign) {
     html += '<div class="isbar-txt" style="font-size:13.5px;line-height:1.7">' + esc(r.sbarS) + '</div>';
   }
   html += '</div>';
-  if (r.status === '已簽收') {
+
+  if (isGroupRec(r)) {
+    // 簽收狀況：誰簽了、誰還沒（名單以該院區該職位在職人員為準，交班者本人除外）
+    var signs = recSigns(r);
+    var members = STAFF.filter(function (s) {
+      return s.clinic === r.toClinic && s.group === r.toGroup && !idEq(s.empId, r.fromId);
+    });
+    var unsigned = members.filter(function (m) {
+      return !signs.some(function (s) { return idEq(s.empId, m.empId); });
+    });
+    var signedTxt = signs.map(function (s) {
+      return s.name + (s.time ? '（' + s.time.slice(5) + '）' : '');
+    }).join('、');
+    html += '<div class="sign-status">';
+    html += '<div class="ss-row ss-ok">✅ 已簽收（' + signs.length + '）：' + (signs.length ? esc(signedTxt) : '尚無人簽收') + '</div>';
+    html += '<div class="ss-row ss-wait">⏳ 未簽收（' + unsigned.length + '）：' + (unsigned.length ? esc(unsigned.map(function (m) { return m.name; }).join('、')) : '無') + '</div>';
+    if (r.status === '已完成') {
+      html += '<div class="ss-row ss-done">✔ ' + esc(r.signName) + ' 已於 ' + esc(r.signTime) + ' 註記執行完成</div>';
+    }
+    html += '</div>';
+    if (r.status !== '已完成' && showSign) {
+      var left = iSigned(r) ? '<span class="hc-sign-info">✓ 您已簽收</span>' : '<span></span>';
+      var btns = '';
+      if (!iSigned(r)) btns += '<button class="sign-btn" onclick="signRec(' + idx + ')">簽收</button>';
+      btns += '<button class="done-btn" onclick="doneRec(' + idx + ')">✔ 執行完成</button>';
+      html += '<div class="hc-foot">' + left + '<span style="display:flex;gap:8px">' + btns + '</span></div>';
+    }
+  } else if (r.status === '已簽收') {
     html += '<div class="hc-foot"><span class="hc-sign-info">✓ ' + esc(r.signName) + ' 已於 ' + esc(r.signTime) + ' 簽收</span></div>';
   } else if (showSign) {
     html += '<div class="hc-foot"><span></span><button class="sign-btn" onclick="signRec(' + idx + ')">簽收</button></div>';
@@ -498,8 +552,8 @@ function setInboxSeg(seg) {
 }
 function loadInbox() { loadMine(true); }
 function renderInbox() {
-  var pending = _inboxRecs.filter(function (r) { return r.status !== '已簽收'; });
-  var done = _inboxRecs.filter(function (r) { return r.status === '已簽收'; });
+  var pending = _inboxRecs.filter(function (r) { return !recDone(r); });
+  var done = _inboxRecs.filter(function (r) { return recDone(r); });
   var cnt = document.getElementById('inbox-cnt');
   if (pending.length > 0) { cnt.style.display = 'inline'; cnt.textContent = pending.length; }
   else cnt.style.display = 'none';
@@ -507,7 +561,7 @@ function renderInbox() {
   var list = _inboxSeg === 'pending' ? pending : done;
   var box = document.getElementById('inbox-list');
   if (list.length === 0) {
-    box.innerHTML = renderEmpty(_inboxSeg === 'pending' ? '目前沒有待簽收的交班' : '尚無已簽收記錄');
+    box.innerHTML = renderEmpty(_inboxSeg === 'pending' ? '目前沒有待處理的交班' : '尚無已結案記錄');
     return;
   }
   var html = '';
@@ -521,10 +575,26 @@ function signRec(idx) {
   var r = _inboxRecs[idx];
   if (!r) { toast('找不到記錄，請重新整理', 'err'); return; }
   // 樂觀更新：畫面立即反應，背景送出並校正
-  r.status = '已簽收'; r.signName = USER.name; r.signTime = '剛剛';
+  if (isGroupRec(r)) {
+    if (!r.signs) r.signs = [];
+    r.signs.push({ kind: '簽收', empId: USER.empId, name: USER.name, time: '' });
+  } else {
+    r.status = '已簽收'; r.signName = USER.name; r.signTime = '剛剛';
+  }
   renderInbox();
   toast('已完成簽收 ✓');
-  get({ action: 'signHandover', recId: r.recId, empId: USER.empId, name: USER.name }, function (res) {
+  get({ action: 'signHandover', kind: 'sign', recId: r.recId, empId: USER.empId, name: USER.name }, function (res) {
+    if (res && res.error) toast(res.error, 'err');
+    loadMine(false);
+  });
+}
+function doneRec(idx) {
+  var r = _inboxRecs[idx];
+  if (!r) { toast('找不到記錄，請重新整理', 'err'); return; }
+  r.status = '已完成'; r.signName = USER.name; r.signTime = '剛剛';
+  renderInbox();
+  toast('已註記執行完成 ✔');
+  get({ action: 'signHandover', kind: 'done', recId: r.recId, empId: USER.empId, name: USER.name }, function (res) {
     if (res && res.error) toast(res.error, 'err');
     loadMine(false);
   });
@@ -721,7 +791,7 @@ function submitHandover() {
       targetType: targetType, targetId: targetId, targetName: targetName,
       fromId: USER.empId, fromName: USER.name, fromGroup: USER.group, fromClinic: USER.clinic,
       priority: _priority, sbarI: '', sbarS: sbarS, sbarB: '', sbarA: '', sbarR: '',
-      status: '待簽收', signId: '', signName: '', signTime: '', created: '剛剛'
+      status: '待簽收', signId: '', signName: '', signTime: '', created: '剛剛', signs: []
     });
     _mineLoaded = true;
     document.getElementById('f-s').value = '';
